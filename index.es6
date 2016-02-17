@@ -4,6 +4,8 @@ import { findDOMNode as findDomNode } from 'react-dom';
 /* eslint-enable id-match */
 import { getClosestDppx } from './get-dppx';
 import { addElementResizeListener, removeElementResizeListener } from './element-resize-listener';
+import { addElementScrollListener, removeElementScrollListener } from './element-scroll-listener';
+import isVisible from './is-visible';
 export default class Picture extends React.Component {
 
   defaultProps = {
@@ -11,37 +13,36 @@ export default class Picture extends React.Component {
     sources: [],
   }
 
-  constructor({ sources }) {
+  constructor() {
     super(...arguments);
     this.changeImageByWidth = this.changeImageByWidth.bind(this);
-    const dppx = getClosestDppx(sources);
-    const smallPortraitSource = sources.reduce((previousSource, currentSource) => {
-      if (currentSource.dppx !== dppx) {
-        return previousSource;
-      }
-      const portraitImageRatioCutoff = 2;
-      const isLessWide = currentSource.width < previousSource.width;
-      const currentImageRatio = Math.abs(currentSource.width / currentSource.height);
-      const isPortrait = currentImageRatio < portraitImageRatioCutoff;
-      return isLessWide && isPortrait ? currentSource : previousSource;
-    }, sources[0] || {});
-    this.state = {
-      ...smallPortraitSource,
-    };
   }
 
   componentDidMount() {
     const element = findDomNode(this);
+    const { sources } = this.props;
+    const dppx = getClosestDppx(sources);
+    const image = element.firstChild;
+    image.onload = () => {
+      element.classList.remove('picture--default');
+    };
+    this.state = { dppx };
     addElementResizeListener(element, this.changeImageByWidth);
+    addElementScrollListener(element, this.changeImageByWidth);
     this.changeImageByWidth(element.offsetWidth, element.offsetHeight);
   }
 
   componentWillUnmount() {
     removeElementResizeListener(findDomNode(this), this.changeImageByWidth);
+    removeElementScrollListener(findDomNode(this), this.changeImageByWidth);
   }
 
   changeImageByWidth(width, height) {
     const { dppx } = this.state;
+    const element = findDomNode(this);
+    if (!isVisible(element)) {
+      return;
+    }
     const bestFitImage = this.props.sources.reduce((leftSource, rightSource) => {
       if (Math.abs(rightSource.dppx - dppx) < Math.abs(leftSource.dppx - dppx)) {
         return rightSource;
@@ -64,7 +65,7 @@ export default class Picture extends React.Component {
     const imageProps = { alt, src: url };
     const wrapperProps = {
       ...remainingProps,
-      className: [ 'picture' ].concat(className).join(' ').trim(),
+      className: [ 'picture', 'picture--default' ].concat(className).join(' ').trim(),
     };
     return (
       <div {...wrapperProps}>
